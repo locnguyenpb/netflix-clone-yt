@@ -1,8 +1,10 @@
+import { getProducts, Product } from "@stripe/firestore-stripe-payments";
 import Head from "next/head";
 import { useRecoilValue } from "recoil";
 import { modalState } from "../atoms/modalAtom";
-import { Banner, Header, Modal, Row } from "../components";
-import { useAuth } from "../hooks";
+import { Banner, Header, Modal, Plans, Row } from "../components";
+import { useAuth, useList, useSubscription } from "../hooks";
+import payments from "../lib/stripe";
 import { Movie } from "../typings";
 import requests from "../utils/requests";
 
@@ -15,6 +17,7 @@ interface Props {
   horrorMovies: Movie[];
   romanceMovies: Movie[];
   documentaries: Movie[];
+  products: Product[];
 }
 
 const Home = ({
@@ -26,11 +29,16 @@ const Home = ({
   romanceMovies,
   topRated,
   trendingNow,
+  products,
 }: Props) => {
-  const { loading } = useAuth();
+  const { user, loading } = useAuth();
+  const subscription = useSubscription(user);
   const showModal = useRecoilValue(modalState);
+  const list = useList(user?.uid);
 
-  if (loading) return null;
+  if (loading || subscription === null) return null;
+
+  if (!subscription) return <Plans products={products} />;
 
   return (
     <div className="relative h-screen bg-gradient-to-b lg:h-[140vh]">
@@ -49,6 +57,7 @@ const Home = ({
           <Row title="Action Thrillers" movies={actionMovies} />
 
           {/* My List */}
+          {list.length > 0 && <Row title="My List" movies={list} />}
 
           <Row title="Comedies" movies={comedyMovies} />
           <Row title="Scary Movies" movies={horrorMovies} />
@@ -65,6 +74,13 @@ const Home = ({
 export default Home;
 
 export const getServerSideProps = async () => {
+  const products = await getProducts(payments, {
+    includePrices: true,
+    activeOnly: true,
+  })
+    .then((res) => res)
+    .catch((error) => console.log(error.message));
+
   const [
     netflixOriginals,
     trendingNow,
@@ -95,6 +111,7 @@ export const getServerSideProps = async () => {
       horrorMovies: horrorMovies.results,
       romanceMovies: romanceMovies.results,
       documentaries: documentaries.results,
+      products,
     },
   };
 };
